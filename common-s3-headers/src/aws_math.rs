@@ -115,7 +115,6 @@ pub fn get_signature_key(datetime: &OffsetDateTime, secret_key: &str, region: &s
 /// assert_eq!(result, "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=wJalrXUtnFEMI%2FK7MDENG%2FbPxRfiCYEXAMPLEKEY%2F19700101%2Fus-east-1%2Fiam%2Faws4_request&X-Amz-Date=19700101T000000Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host");
 /// ```
 ///
-#[allow(dead_code)]
 pub fn authorization_query_params_no_sig(
   access_key: &str,
   datetime: &OffsetDateTime,

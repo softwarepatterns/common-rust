@@ -3,7 +3,6 @@
 //! Any creation of strings goes here.
 //!
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
-use std::ops::Add;
 use time::{macros::format_description, OffsetDateTime};
 use url::Url;
 
@@ -293,12 +292,12 @@ pub fn canonical_request_string<S: AsRef<str>>(
   canonical_headers: &[(S, &str)],
   payload_hash: &str,
 ) -> String {
+  let headers = to_key_value_strings(canonical_headers, ":").join("\n");
   format!(
-    "{}\n{}\n{}\n{}\n{}\n{}",
+    "{}\n{}\n{}\n{headers}\n\n{}\n{}",
     method,
     canonical_uri_string(url),
     canonical_query_string(url),
-    to_key_value_strings(canonical_headers, ":").join("\n").add("\n"),
     get_keys(canonical_headers).join(";"),
     payload_hash
   )

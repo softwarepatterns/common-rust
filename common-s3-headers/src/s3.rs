@@ -5,6 +5,10 @@ use url::Url;
 
 pub const EMPTY_PAYLOAD_SHA: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
+/// The payload-hash value used for presigned URLs. A presigned GET does not hash
+/// the request body; S3 accepts `UNSIGNED-PAYLOAD`.
+pub const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
+
 #[derive(Debug, Default, Clone, Copy)]
 pub enum S3DateTime {
   #[default]
@@ -154,17 +158,79 @@ pub fn get_authorization_header(options: S3HeadersBuilder) -> String {
   let canonical_headers = aws_canonical::to_canonical_headers(options.headers);
   let canonical_request = aws_format::canonical_request_string(method, url, &canonical_headers, &payload_hash);
 
-  println!("canonical_request: {:?}", canonical_request);
-
   let string_to_sign = aws_format::string_to_sign(&datetime, region, service, &canonical_request);
   let signing_key = aws_math::get_signature_key(&datetime, secret_key, region, service);
-
-  println!("string_to_sign: {:?}", string_to_sign);
-  println!("signing_key: {:?}", signing_key);
 
   let hmac: aws_math::HmacSha256 = aws_math::sign(&signing_key, string_to_sign.as_bytes());
   let signature = hex::encode(hmac.finalize().into_bytes());
   let signed_headers = aws_format::get_keys(&canonical_headers).join(";");
 
   aws_format::authorization_header_string(access_key, &datetime, region, service, &signed_headers, &signature)
+}
+
+/// Build a presigned GET URL for downloading `url` directly from an
+/// S3-compatible service.
+///
+/// The returned URL carries AWS SigV4 query-parameter authentication. The holder
+/// may GET the object until the signature expires, with no further credentials.
+/// Only the `host` header is signed, and the request body is not hashed
+/// (`UNSIGNED-PAYLOAD`) — the correct choices for a download URL.
+///
+/// `expires` is the URL lifetime in seconds; S3 rejects values outside
+/// `1..=604800` (7 days).
+pub fn presign_get(
+  url: &Url,
+  access_key: &str,
+  secret_key: &str,
+  region: &str,
+  service: &str,
+  datetime: S3DateTime,
+  expires: u32,
+) -> String {
+  let datetime = datetime.get_offset_datetime();
+  let host = host_with_port(url);
+  let canonical_uri = aws_format::canonical_uri_string(url);
+
+  // The presign query params (X-Amz-Algorithm … X-Amz-SignedHeaders), already
+  // alphabetical and percent-encoded. They are returned with a leading '?';
+  // strip it to form the canonical query string used for signing.
+  let presign_query = aws_math::authorization_query_params_no_sig(
+    access_key,
+    &datetime,
+    region,
+    service,
+    expires,
+    None,
+    None,
+  );
+  let canonical_query = presign_query.strip_prefix('?').unwrap_or(&presign_query);
+
+  // The canonical request for a presigned URL: GET, the canonical URI, the
+  // presign query params as the canonical query, the host header only, and
+  // UNSIGNED-PAYLOAD. X-Amz-Signature is appended after signing and is not part
+  // of the canonical request.
+  let canonical_request = format!(
+    "GET\n{canonical_uri}\n{canonical_query}\nhost:{host}\n\nhost\n{UNSIGNED_PAYLOAD}",
+  );
+
+  let string_to_sign = aws_format::string_to_sign(&datetime, region, service, &canonical_request);
+  let signing_key = aws_math::get_signature_key(&datetime, secret_key, region, service);
+  let hmac = aws_math::sign(&signing_key, string_to_sign.as_bytes());
+  let signature = hex::encode(hmac.finalize().into_bytes());
+
+  format!(
+    "{}://{host}{canonical_uri}?{canonical_query}&X-Amz-Signature={signature}",
+    url.scheme(),
+  )
+}
+
+/// Render the URL's host with its port when one is present, so the signed `host`
+/// header matches what the client actually sends. Required for non-default ports
+/// such as local S3-compatible services.
+fn host_with_port(url: &Url) -> String {
+  let host = url.host_str().expect("url must have a host");
+  match url.port() {
+    Some(port) => format!("{host}:{port}"),
+    None => host.to_string(),
+  }
 }
