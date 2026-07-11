@@ -178,6 +178,10 @@ pub fn get_authorization_header(options: S3HeadersBuilder) -> String {
 ///
 /// `expires` is the URL lifetime in seconds; S3 rejects values outside
 /// `1..=604800` (7 days).
+///
+/// This derives the SigV4 signing key from `secret_key` on every call. To reuse
+/// a cached signing key across many presign calls (the key is stable for a UTC
+/// day per `(region, service)`), use [`presign_get_with_key`].
 pub fn presign_get(
   url: &Url,
   access_key: &str,
@@ -188,6 +192,25 @@ pub fn presign_get(
   expires: u32,
 ) -> String {
   let datetime = datetime.get_offset_datetime();
+  let signing_key = aws_math::get_signature_key(&datetime, secret_key, region, service);
+  presign_get_with_key(url, access_key, region, service, datetime, expires, &signing_key)
+}
+
+/// Build a presigned GET URL using a pre-computed SigV4 signing key.
+///
+/// Same output as [`presign_get`], but accepts a signing key (e.g. from a cache)
+/// instead of a secret key, so the 4-stage HMAC key derivation is not repeated
+/// per call. The key MUST be the one derived for `(datetime's UTC date, region,
+/// service)` — callers typically obtain it via a cache keyed on that tuple.
+pub fn presign_get_with_key(
+  url: &Url,
+  access_key: &str,
+  region: &str,
+  service: &str,
+  datetime: time::OffsetDateTime,
+  expires: u32,
+  signing_key: &[u8],
+) -> String {
   let host = host_with_port(url);
   let canonical_uri = aws_format::canonical_uri_string(url);
 
@@ -214,8 +237,7 @@ pub fn presign_get(
   );
 
   let string_to_sign = aws_format::string_to_sign(&datetime, region, service, &canonical_request);
-  let signing_key = aws_math::get_signature_key(&datetime, secret_key, region, service);
-  let hmac = aws_math::sign(&signing_key, string_to_sign.as_bytes());
+  let hmac = aws_math::sign(signing_key, string_to_sign.as_bytes());
   let signature = hex::encode(hmac.finalize().into_bytes());
 
   format!(

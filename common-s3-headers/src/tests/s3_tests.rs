@@ -209,3 +209,38 @@ fn tail_signature(presigned_url: &str) -> String {
     .expect("presigned url must carry X-Amz-Signature");
   presigned_url[idx + marker.len()..].to_owned()
 }
+
+#[test]
+fn test_presign_get_with_key_matches_presign_get() {
+  let datetime = fixture_datetime();
+  let url = Url::from_str("https://examplebucket.s3.amazonaws.com/test.txt").unwrap();
+  let ts = S3DateTime::UnixTimestamp(datetime.unix_timestamp());
+
+  let direct = s3::presign_get(
+    &url,
+    "AKIAIOSFODNN7EXAMPLE",
+    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "us-east-1",
+    "s3",
+    ts,
+    3600,
+  );
+  let signing_key = crate::aws_math::get_signature_key(
+    &datetime,
+    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "us-east-1",
+    "s3",
+  );
+  let with_key = s3::presign_get_with_key(
+    &url,
+    "AKIAIOSFODNN7EXAMPLE",
+    "us-east-1",
+    "s3",
+    datetime,
+    3600,
+    &signing_key,
+  );
+  // The cached-key variant must produce the identical URL and signature.
+  assert_eq!(direct, with_key);
+  assert_eq!(tail_signature(&direct), tail_signature(&with_key));
+}
