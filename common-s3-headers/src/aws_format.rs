@@ -524,4 +524,54 @@ mod tests {
   fn test_uri_encode() {
     assert_eq!(uri_encode(r#"~!@#$%^&*()-_=+[]\{}|;:'",.<>? привет 你好"#, true), "~%21%40%23%24%25%5E%26%2A%28%29-_%3D%2B%5B%5D%5C%7B%7D%7C%3B%3A%27%22%2C.%3C%3E%3F%20%D0%BF%D1%80%D0%B8%D0%B2%D0%B5%D1%82%20%E4%BD%A0%E5%A5%BD");
   }
+
+  #[test]
+  fn query_params_string_renders_expiry_and_signed_headers() {
+    let datetime = OffsetDateTime::from_unix_timestamp(0).unwrap();
+    let result = query_params_string(
+      &["host", "x-amz-content-sha256", "x-amz-date"],
+      "AKIAEXAMPLE",
+      &datetime,
+      "us-west-2",
+      "s3",
+      900,
+    );
+    // Algorithm + credential (region + expiry rendered) + signed-headers list.
+    assert!(result.starts_with("?X-Amz-Algorithm=AWS4-HMAC-SHA256&"));
+    assert!(result.contains("X-Amz-Credential=AKIAEXAMPLE%2F19700101%2Fus-west-2%2Fs3%2Faws4_request"));
+    assert!(result.contains("X-Amz-Date=19700101T000000Z"));
+    assert!(result.contains("X-Amz-Expires=900"));
+    assert!(result.contains("X-Amz-SignedHeaders=host%3Bx-amz-content-sha256%3Bx-amz-date"));
+  }
+
+  #[test]
+  fn security_token_string_percent_encodes_token() {
+    // Special characters and spaces are percent-encoded with FRAGMENT_SLASH.
+    assert_eq!(
+      security_token_string("a/b c"),
+      "&X-Amz-Security-Token=a%2Fb%20c"
+    );
+    assert_eq!(security_token_string("plain"), "&X-Amz-Security-Token=plain");
+  }
+
+  #[test]
+  fn canonical_request_orders_headers_alphabetically() {
+    // Headers supplied out of order must be sorted in the canonical request.
+    let url = Url::parse("https://examplebucket.s3.amazonaws.com/k").unwrap();
+    let headers = vec![
+      ("X-Amz-Date", "20240101T000000Z".to_owned()),
+      ("Host", "examplebucket.s3.amazonaws.com".to_owned()),
+      (
+        "x-amz-content-sha256",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_owned(),
+      ),
+    ];
+    let canonical = to_canonical_headers(&headers);
+    let keys: Vec<&str> = canonical.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(
+      keys,
+      vec!["host", "x-amz-content-sha256", "x-amz-date"],
+      "canonical headers must be lowercase and sorted"
+    );
+  }
 }
