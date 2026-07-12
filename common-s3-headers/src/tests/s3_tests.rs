@@ -44,6 +44,58 @@ fn extract_signature(auth_header: &str) -> &str {
     auth_header.rsplit("Signature=").next().unwrap()
 }
 
+// --- Issue #2 regression: x-amz-date and credential scope must use the same date ---
+
+#[test]
+fn get_headers_uses_consistent_datetime_issue_2() {
+    // Even with S3DateTime::Now (wall-clock), the x-amz-date header and the
+    // credential-scope date in the Authorization header must never diverge
+    // across a second boundary. The fix resolves the datetime once via
+    // S3DateTime::Resolved and reuses it for both (issue #2).
+    let url = Url::from_str("https://examplebucket.s3.amazonaws.com/test.txt").unwrap();
+    let options = S3HeadersBuilder::new(&url)
+        .set_access_key("AKIAIOSFODNN7EXAMPLE")
+        .set_secret_key("wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
+        .set_region("us-east-1")
+        .set_service("s3")
+        .set_datetime(S3DateTime::Now)
+        .set_method("GET")
+        .set_payload_hash(crate::s3::EMPTY_PAYLOAD_SHA);
+    let headers = s3::get_headers(options);
+
+    let amz_date = headers
+        .iter()
+        .find(|(k, _)| *k == "x-amz-date")
+        .map(|(_, v)| v.as_str())
+        .expect("x-amz-date header must be present");
+
+    let auth = headers
+        .iter()
+        .find(|(k, _)| *k == "Authorization")
+        .map(|(_, v)| v.as_str())
+        .expect("Authorization header must be present");
+
+    // The credential scope is: Credential=ACCESS_KEY/YYYYMMDD/REGION/SERVICE/aws4_request.
+    let scope_date = auth
+        .split('/')
+        .nth(1)
+        .expect("credential scope must contain a date segment");
+
+    assert_eq!(
+        &amz_date[..8],
+        scope_date,
+        "x-amz-date date ({}) must match credential scope date ({}) — issue #2",
+        &amz_date[..8],
+        scope_date,
+    );
+}
+
+#[test]
+fn resolved_datetime_returns_held_value() {
+    let dt = time::OffsetDateTime::from_unix_timestamp(1_234_567_890).unwrap();
+    assert_eq!(S3DateTime::Resolved(dt).get_offset_datetime(), dt);
+}
+
 #[test]
 fn aws_iot_kat_iam_listusers_nominal() {
     let url = Url::from_str(

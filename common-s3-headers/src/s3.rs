@@ -9,11 +9,20 @@ pub const EMPTY_PAYLOAD_SHA: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649
 /// the request body; S3 accepts `UNSIGNED-PAYLOAD`.
 pub const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 
+/// Specifies when a request is made. Used to derive the `x-amz-date` header and
+/// the SigV4 credential scope's date.
+///
+/// For production, use [`Now`](Self::Now) or [`UnixTimestamp`](Self::UnixTimestamp).
+/// The [`Resolved`](Self::Resolved) variant is produced internally by
+/// [`get_headers`] after resolving the datetime once, so the date header and the
+/// signing scope never diverge across a second boundary (see issue #2).
 #[derive(Debug, Default, Clone, Copy)]
 pub enum S3DateTime {
   #[default]
   Now,
   UnixTimestamp(i64),
+  /// A pre-resolved datetime, used internally to avoid a second wall-clock read.
+  Resolved(time::OffsetDateTime),
 }
 
 impl S3DateTime {
@@ -23,6 +32,7 @@ impl S3DateTime {
       S3DateTime::UnixTimestamp(timestamp) => {
         time::OffsetDateTime::from_unix_timestamp(*timestamp).expect("Always valid")
       }
+      S3DateTime::Resolved(dt) => *dt,
     }
   }
 }
@@ -114,6 +124,8 @@ impl<'a> S3HeadersBuilder<'a> {
 pub fn get_headers(options: S3HeadersBuilder) -> Vec<(&'static str, String)> {
   let url = options.url;
   let payload_hash = &options.payload_hash;
+  // Resolve the datetime ONCE so the x-amz-date header and the signing scope
+  // can never diverge across a second boundary (issue #2).
   let datetime = options.datetime.get_offset_datetime();
   let amz_date = aws_format::to_long_datetime(&datetime);
 
@@ -127,8 +139,9 @@ pub fn get_headers(options: S3HeadersBuilder) -> Vec<(&'static str, String)> {
   ]
   .concat();
 
-  let auth_header = get_authorization_header(options.set_headers(&headers));
-
+  // Pass the pre-resolved datetime so get_authorization_header does not
+  // re-read the wall clock (which could cross a second boundary).
+  let auth_header = get_authorization_header(options.set_datetime(S3DateTime::Resolved(datetime)).set_headers(&headers));
   headers.push(("Authorization", auth_header));
   headers
 }
