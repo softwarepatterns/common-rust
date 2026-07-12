@@ -68,12 +68,17 @@ fn fold_hmacs(items: &[&[u8]]) -> Vec<u8> {
 ///
 /// ```
 /// use common_s3_headers::aws_math::get_signature_key;
-/// use time::OffsetDateTime;
+/// use time::Date;
 ///
-/// let datetime = OffsetDateTime::now_utc();
-/// let result = get_signature_key(&datetime, "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", "iam");
+/// // The AWS reference vector for 2015-08-30 / us-east-1 / iam.
+/// let datetime = Date::from_calendar_date(2015, time::Month::August, 30)
+///     .unwrap()
+///     .with_hms(0, 0, 0)
+///     .unwrap()
+///     .assume_utc();
+/// let result = get_signature_key(&datetime, "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY", "us-east-1", "iam");
 /// assert_eq!(result, vec![
-///  74, 3, 90, 110, 208, 212, 221, 157, 23, 92, 98, 135, 89, 69, 167, 237, 78, 139, 55, 231, 149, 132, 41, 187, 21, 242, 192, 178, 126, 53, 92, 48
+///  196, 175, 177, 204, 87, 113, 216, 113, 118, 58, 57, 62, 68, 183, 3, 87, 27, 85, 204, 40, 66, 77, 26, 94, 134, 218, 110, 211, 193, 84, 164, 185
 /// ]);
 /// ```
 ///

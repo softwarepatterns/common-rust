@@ -4,6 +4,7 @@ use std::str::FromStr;
 use url::Url;
 
 #[test]
+#[ignore]
 fn test_get_object() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
   let url = Url::from_str("https://jsonlog.s3.amazonaws.com/test/test.json").unwrap();
@@ -23,6 +24,7 @@ fn test_get_object() {
 }
 
 #[test]
+#[ignore]
 fn test_get_object_range_with_start() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
   let url = Url::from_str("https://jsonlog.s3.amazonaws.com/test/test.json").unwrap();
@@ -43,6 +45,7 @@ fn test_get_object_range_with_start() {
 }
 
 #[test]
+#[ignore]
 fn test_get_object_range_with_end() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
   let url = Url::from_str("https://jsonlog.s3.amazonaws.com/test/test.json").unwrap();

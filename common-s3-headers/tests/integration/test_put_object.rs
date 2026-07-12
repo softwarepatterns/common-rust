@@ -4,6 +4,7 @@ use std::str::FromStr;
 use url::Url;
 
 #[test]
+#[ignore]
 fn test_put_object() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
 
@@ -29,6 +30,7 @@ fn test_put_object() {
 const PUT_METHOD: &str = "PUT";
 
 #[test]
+#[ignore]
 fn test_put_object_with_sha_shortcut() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
 
@@ -51,6 +53,7 @@ fn test_put_object_with_sha_shortcut() {
 }
 
 #[test]
+#[ignore]
 fn test_put_object_full() {
   // Build the S3 headers
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");

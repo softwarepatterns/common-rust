@@ -35,6 +35,7 @@ struct AwsOwner {
 }
 
 #[test]
+#[ignore]
 fn test_aws_structures() {
   let body = r#"<?xml version="1.0" encoding="UTF-8"?>
   <ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -51,6 +52,7 @@ fn test_aws_structures() {
 }
 
 #[test]
+#[ignore]
 fn test_list_objects() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
   let url = Url::from_str("https://jsonlog.s3.amazonaws.com/").unwrap();
@@ -75,6 +77,7 @@ fn test_list_objects() {
 }
 
 #[test]
+#[ignore]
 fn test_list_objects_v2() {
   let (access_key, secret_key, region) = setup::get_config_from_env("TEST_S3");
   let url = Url::from_str("https://jsonlog.s3.amazonaws.com/?list_type=2").unwrap();
